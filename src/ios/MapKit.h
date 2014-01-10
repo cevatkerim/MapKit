@@ -32,6 +32,8 @@
 
 - (void)clearMapPins:(CDVInvokedUrlCommand *)command;
 
+- (void)renderMapViewToImage:(CDVInvokedUrlCommand *)command;
+
 - (void)addMapPins:(CDVInvokedUrlCommand *)command;
 
 @end
