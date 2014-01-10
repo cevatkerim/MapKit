@@ -40,9 +40,15 @@
     float x = self.webView.bounds.origin.x;
     float y = self.webView.bounds.origin.y;
     BOOL atBottom = ([options objectForKey:@"atBottom"]) ? [[options objectForKey:@"atBottom"] boolValue] : NO;
+    BOOL startHidden = ([options objectForKey:@"startHidden"]) ? [[options objectForKey:@"startHidden"] boolValue] : NO;
 
     if(atBottom) {
         y += self.webView.bounds.size.height - height;
+    }
+    
+    if(startHidden)
+    {
+        y -= self.webView.bounds.size.height;
     }
 
     self.childView = [[UIView alloc] initWithFrame:CGRectMake(x,y,width,height)];
@@ -62,13 +68,18 @@
 	MKCoordinateRegion region=[ self.mapView regionThatFits: MKCoordinateRegionMakeWithDistance(centerCoord,
                                                                                                 diameter*(height / self.webView.bounds.size.width),
                                                                                                 diameter*(height / self.webView.bounds.size.width))];
+    
     [self.mapView setRegion:region animated:YES];
 	[self.childView addSubview:self.mapView];
 
 	[ [ [ self viewController ] view ] addSubview:self.childView];
 
+    if(startHidden == YES)
+    {
+        self.mapView.showsUserLocation = NO;
+        self.childView.hidden = YES;
+    }
 }
-
 - (void)destroyMap:(CDVInvokedUrlCommand *)command
 {
 	if (self.mapView)
@@ -143,6 +154,7 @@
 	{
         [self createViewWithOptions:command.arguments[0]];
 	}
+    
 	self.childView.hidden = NO;
 	self.mapView.showsUserLocation = YES;
     [self.commandDelegate sendPluginResult:[CDVPluginResult resultWithStatus:CDVCommandStatus_OK] callbackId:command.callbackId];
@@ -285,6 +297,108 @@
 	NSString* jsString = [NSString stringWithFormat:@"%@(\"%i\");", self.buttonCallback, tmpButton.tag];
 	[self.webView stringByEvaluatingJavaScriptFromString:jsString];
 }
+
+- (void) renderMapViewToImage:(CDVInvokedUrlCommand*)command
+{
+    NSLog(@"renderMapViewToImage");
+    
+    NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
+    NSString *documentsDirectoryPath = [paths objectAtIndex:0];
+    
+    MKMapSnapshotOptions *options = [[MKMapSnapshotOptions alloc] init];
+    options.region = self.mapView.region;
+    options.scale = [UIScreen mainScreen].scale;
+    
+    CGSize size;
+    size.width = 320;
+    size.height= 100;
+    
+    //options.size = self.mapView.frame.size; //error on ios simulator
+    
+    
+    
+    MKMapSnapshotter *snapshotter = [[MKMapSnapshotter alloc] initWithOptions:options];
+    
+    __block MapKitView *blockSafeSelf = self;
+    
+    [snapshotter startWithQueue:dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0) completionHandler:^(MKMapSnapshot *snapshot, NSError *error) {
+        
+        NSLog(@"Queued Function");
+        
+        //Cordova stuff
+        CDVPluginResult* pluginResult;
+        
+        
+        // string to hold encoded image
+        NSString *base64image;
+        
+        // get the image associated with the snapshot
+        
+        UIImage *image = snapshot.image;
+        
+        // Get the size of the final image
+        
+        CGRect finalImageRect = CGRectMake(0, 0, image.size.width, image.size.height);
+        
+        // Get a standard annotation view pin. Clearly, Apple assumes that we'll only want to draw standard annotation pins!
+        
+        MKAnnotationView *pin = [[MKPinAnnotationView alloc] initWithAnnotation:nil reuseIdentifier:@""];
+        UIImage *pinImage = pin.image;
+        
+        // ok, let's start to create our final image
+        
+        UIGraphicsBeginImageContextWithOptions(image.size, YES, image.scale);
+        
+        // first, draw the image from the snapshotter
+        
+        [image drawAtPoint:CGPointMake(0, 0)];
+        
+        // now, let's iterate through the annotations and draw them, too
+        
+        for (id<MKAnnotation>annotation in self.mapView.annotations)
+        {
+            CGPoint point = [snapshot pointForCoordinate:annotation.coordinate];
+            if (CGRectContainsPoint(finalImageRect, point)) // this is too conservative, but you get the idea
+            {
+                CGPoint pinCenterOffset = pin.centerOffset;
+                point.x -= pin.bounds.size.width / 2.0;
+                point.y -= pin.bounds.size.height / 2.0;
+                point.x += pinCenterOffset.x;
+                point.y += pinCenterOffset.y;
+                
+                [pinImage drawAtPoint:point];
+            }
+        }
+        
+        // grab the final image
+        
+        UIImage *finalImage = UIGraphicsGetImageFromCurrentImageContext();
+        UIGraphicsEndImageContext();
+        
+        // and save it
+        
+        //NSData *data = UIImagePNGRepresentation(finalImage);
+        
+        
+        
+        base64image = [UIImagePNGRepresentation(finalImage) base64EncodedStringWithOptions:NSDataBase64Encoding64CharacterLineLength];
+        
+        pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsString:base64image];
+        
+        
+    
+        //return @"test";
+        
+        //[data writeToFile:[documentsDirectoryPath stringByAppendingPathComponent:@"map.png"] atomically:YES];
+        
+        NSLog(@"Wrote Image to callback");
+        
+        [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+    }];
+}
+
+
+
 
 - (void)dealloc
 {
