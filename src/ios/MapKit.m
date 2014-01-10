@@ -312,6 +312,7 @@
     CGSize size;
     size.width = 320;
     size.height= 100;
+    options.size = size;
     
     //options.size = self.mapView.frame.size; //error on ios simulator
     
