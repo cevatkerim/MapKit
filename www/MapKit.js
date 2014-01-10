@@ -1,4 +1,4 @@
-var exec = require('cordova/exec');
+cordova.define("com.phonegap.plugins.mapkit.mapkit", function(require, exports, module) {var exec = require('cordova/exec');
 
 var MapKit = function() {
 	this.mapType = {
@@ -63,8 +63,17 @@ MapKit.prototype = {
 
 	changeMapType: function(mapType, success, error) {
 		exec(success, error, 'MapKit', 'changeMapType', [mapType ? { "mapType": mapType } :{ "mapType": 0 }]);
-	}
+	},
+               
+    renderMapViewToImage: function(success, error) {
+       exec(success, error, 'MapKit', 'renderMapViewToImage', []);
+    },
+               
+    destroyMap: function(success, error) {
+        exec(success, error, 'MapKit', 'destroyMap', []);
+    }
 
 };
 
 module.exports = new MapKit();
+});
